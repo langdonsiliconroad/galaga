@@ -1,0 +1,75 @@
+:root {
+  --bg: #02030f;
+  --fg: #f8f8f8;
+  --accent: #ff3156;
+  --accent-alt: #2cf2ff;
+  --arcade-green: #90ff90;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at top, #0d1030, #01020c 70%);
+  color: var(--fg);
+  font-family: "Trebuchet MS", "Segoe UI", Arial, sans-serif;
+}
+
+.game-shell {
+  width: min(94vw, 540px);
+}
+
+.hud {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.03em;
+  color: var(--arcade-green);
+  text-shadow: 0 0 8px #89ff8966;
+}
+
+.canvas-wrap {
+  position: relative;
+  border: 2px solid #6970d8;
+  box-shadow: 0 0 0 1px #2a2f64 inset, 0 0 24px #4954f355;
+  background: linear-gradient(#03041a, #01010a);
+}
+
+canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  image-rendering: pixelated;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  font-size: 1.1rem;
+  color: #ffffff;
+  text-shadow: 0 0 8px #000;
+  pointer-events: none;
+}
+
+.overlay strong {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 1.4rem;
+  color: var(--accent-alt);
+}
+
+.controls {
+  text-align: center;
+  font-size: 0.8rem;
+  color: #c8cbff;
+}

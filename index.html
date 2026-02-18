@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Galaga JS</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="game-shell">
+    <header class="hud" aria-live="polite">
+      <div>SCORE <span id="score">000000</span></div>
+      <div>HI-SCORE <span id="hiscore">000000</span></div>
+      <div>STAGE <span id="stage">1</span></div>
+      <div>SHIPS <span id="lives">3</span></div>
+    </header>
+
+    <section class="canvas-wrap">
+      <canvas id="game" width="480" height="640" role="img" aria-label="Galaga game field"></canvas>
+      <div id="overlay" class="overlay"></div>
+    </section>
+
+    <footer class="controls">
+      <p>Move: ← → / A D · Fire: Space · Pause: P</p>
+    </footer>
+  </main>
+
+  <script type="module" src="game.js"></script>
+</body>
+</html>
