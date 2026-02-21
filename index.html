@@ -141,6 +141,7 @@
             enemies: [],
             enemyBullets: [],
             explosions: [],
+            playerExplosions: [],
             cooldown: 0,
             waveTimer: 0
         };
@@ -164,6 +165,7 @@
             state.bullets = [];
             state.enemyBullets = [];
             state.explosions = [];
+            state.playerExplosions = [];
             state.cooldown = 0;
             state.waveTimer = 0;
             state.player = createPlayer();
@@ -199,7 +201,8 @@
                         speed: 0.5 + wave * 0.06 + row * 0.08,
                         attackCooldown: 40 + Math.random() * 120,
                         health: baseHealth,
-                        points: 50 + row * 15
+                        points: 50 + row * 15,
+                        hue: (wave * 28 + row * 52 + col * 19) % 360
                     });
                 }
             }
@@ -243,6 +246,34 @@
                     vy: Math.sin(angle) * speed,
                     life: 28 + Math.random() * 12,
                     color
+                });
+            }
+        }
+
+        function createPlayerHitExplosion(x, y) {
+            const burstColors = ["#ff5277", "#ff8bd1", "#ffd166", "#7ce9ff"];
+            for (let i = 0; i < 28; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 4.8 + 1.4;
+                state.explosions.push({
+                    x,
+                    y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 30 + Math.random() * 14,
+                    color: burstColors[i % burstColors.length]
+                });
+            }
+
+            for (let ring = 0; ring < 3; ring++) {
+                state.playerExplosions.push({
+                    x,
+                    y,
+                    radius: 10 + ring * 8,
+                    growth: 2.8 + ring * 0.7,
+                    life: 26 - ring * 4,
+                    width: 4 - ring,
+                    color: ring === 0 ? "#ffffff" : ring === 1 ? "#ff82a8" : "#7ce9ff"
                 });
             }
         }
@@ -357,7 +388,7 @@
                 if (circleRectCollision(bullet.x, bullet.y, bullet.radius, playerRect)) {
                     bullet.hit = true;
                     state.lives -= 1;
-                    createExplosion(bullet.x, bullet.y, "#ff9ab3");
+                    createPlayerHitExplosion(state.player.x, state.player.y);
                     if (state.lives <= 0) {
                         gameOver(false);
                     }
@@ -374,7 +405,7 @@
                         height: state.player.height
                     };
                     if (!enemy.dead && rectsOverlap(enemyRect, playerRect)) {
-                        createExplosion(state.player.x, state.player.y, "#ff5e7f");
+                        createPlayerHitExplosion(state.player.x, state.player.y);
                         gameOver(false);
                         break;
                     }
@@ -397,6 +428,12 @@
                 p.life -= 1;
             });
             state.explosions = state.explosions.filter(p => p.life > 0);
+
+            state.playerExplosions.forEach(ring => {
+                ring.radius += ring.growth;
+                ring.life -= 1;
+            });
+            state.playerExplosions = state.playerExplosions.filter(ring => ring.life > 0);
 
             if (!state.gameOver && state.enemies.length === 0) {
                 state.wave += 1;
@@ -467,16 +504,33 @@
             }
 
             for (const enemy of state.enemies) {
-                ctx.fillStyle = enemy.health > 1 ? "#ff5f79" : "#ffb347";
+                const damageShift = (1 - enemy.health / Math.max(1, 1 + Math.floor(state.wave / 3))) * 22;
+                const mainColor = `hsl(${(enemy.hue + damageShift) % 360} 92% 58%)`;
+                const trimColor = `hsl(${(enemy.hue + 50) % 360} 95% 78%)`;
+                ctx.fillStyle = mainColor;
                 ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                ctx.fillStyle = trimColor;
+                ctx.fillRect(enemy.x + 3, enemy.y + 4, enemy.width - 6, 4);
                 ctx.fillStyle = "#1f263a";
                 ctx.fillRect(enemy.x + 8, enemy.y + 8, enemy.width - 16, 8);
+                ctx.fillStyle = "rgba(255,255,255,0.8)";
+                ctx.fillRect(enemy.x + enemy.width / 2 - 3, enemy.y + 17, 6, 3);
             }
 
             for (const p of state.explosions) {
                 ctx.globalAlpha = Math.max(0, p.life / 35);
                 ctx.fillStyle = p.color;
                 ctx.fillRect(p.x, p.y, 3, 3);
+                ctx.globalAlpha = 1;
+            }
+
+            for (const ring of state.playerExplosions) {
+                ctx.globalAlpha = Math.max(0, ring.life / 26);
+                ctx.strokeStyle = ring.color;
+                ctx.lineWidth = ring.width;
+                ctx.beginPath();
+                ctx.arc(ring.x, ring.y, ring.radius, 0, Math.PI * 2);
+                ctx.stroke();
                 ctx.globalAlpha = 1;
             }
 
