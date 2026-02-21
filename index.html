@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galaga</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; background: #000; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById(gameCanvas);
+        const ctx = canvas.getContext(2d);
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Game variables
+        let player = { x: canvas.width / 2, y: canvas.height - 50, width: 50, height: 30 };
+        let bullets = [];
+
+        function update() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw player
+            ctx.fillStyle = white;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            // Draw bullets
+            bullets.forEach(bullet => {
+                ctx.fillRect(bullet.x, bullet.y, 5, 20);
+            });
+        }
+
+        function shoot() {
+            bullets.push({ x: player.x + player.width / 2 - 2.5, y: player.y });
+        }
+
+        // Event listeners
+        window.addEventListener(keydown, function(e) {
+            if (e.key ===  ) shoot();
+        });
+
+        // Game loop
+        function gameLoop() {
+            update();
+            requestAnimationFrame(gameLoop);
+        }
+        gameLoop();
+    </script>
+</body>
+</html>
