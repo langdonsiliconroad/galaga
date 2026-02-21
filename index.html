@@ -143,7 +143,8 @@
             explosions: [],
             playerExplosions: [],
             cooldown: 0,
-            waveTimer: 0
+            waveTimer: 0,
+            formationDirection: 1
         };
 
         function createPlayer() {
@@ -168,6 +169,7 @@
             state.playerExplosions = [];
             state.cooldown = 0;
             state.waveTimer = 0;
+            state.formationDirection = 1;
             state.player = createPlayer();
             state.stars = Array.from({ length: 130 }, () => ({
                 x: Math.random() * canvas.width,
@@ -192,17 +194,28 @@
 
             for (let row = 0; row < rows; row++) {
                 for (let col = 0; col < cols; col++) {
+                    const targetX = startX + col * (enemyWidth + gap);
+                    const targetY = 90 + row * (enemyHeight + gap);
                     state.enemies.push({
-                        x: startX + col * (enemyWidth + gap),
-                        y: 90 + row * (enemyHeight + gap),
+                        x: targetX + (Math.random() - 0.5) * 220,
+                        y: -220 - row * 60 - Math.random() * 200,
+                        startY: -220 - row * 60,
+                        targetX,
+                        targetY,
                         width: enemyWidth,
                         height: enemyHeight,
-                        dir: Math.random() > 0.5 ? 1 : -1,
-                        speed: 0.5 + wave * 0.06 + row * 0.08,
-                        attackCooldown: 40 + Math.random() * 120,
+                        speed: 0.45 + wave * 0.05 + row * 0.07,
+                        attackCooldown: 50 + Math.random() * 120,
                         health: baseHealth,
                         points: 50 + row * 15,
-                        hue: (wave * 28 + row * 52 + col * 19) % 360
+                        hue: (wave * 28 + row * 52 + col * 19) % 360,
+                        entryDelay: row * 9 + col * 2,
+                        entryProgress: 0,
+                        entering: true,
+                        swooping: false,
+                        swoopTime: 0,
+                        vx: 0,
+                        vy: 0
                     });
                 }
             }
@@ -346,21 +359,93 @@
                 bullet.y += bullet.speed;
             });
 
+            let formationNeedsTurn = false;
+
             state.enemies.forEach(enemy => {
-                enemy.x += enemy.dir * enemy.speed;
-                if (enemy.x < 8 || enemy.x + enemy.width > canvas.width - 8) {
-                    enemy.dir *= -1;
-                    enemy.y += 18;
+                if (enemy.entering) {
+                    if (enemy.entryDelay > 0) {
+                        enemy.entryDelay -= 1;
+                        enemy.y += 1.2;
+                        return;
+                    }
+
+                    enemy.entryProgress += 0.018 + state.wave * 0.0012;
+                    const t = Math.min(1, enemy.entryProgress);
+                    const eased = 1 - Math.pow(1 - t, 3);
+                    enemy.x += (enemy.targetX - enemy.x) * 0.08 + Math.sin(t * 8 + enemy.hue) * 0.35;
+                    enemy.y = enemy.startY + (enemy.targetY - enemy.startY) * eased + Math.sin(t * 10 + enemy.hue) * 3;
+
+                    if (t >= 1 || Math.abs(enemy.x - enemy.targetX) < 2) {
+                        enemy.entering = false;
+                        enemy.x = enemy.targetX;
+                        enemy.y = enemy.targetY;
+                    }
+                    return;
+                }
+
+                if (enemy.swooping) {
+                    enemy.swoopTime += 1;
+                    enemy.vy += 0.045;
+                    enemy.x += enemy.vx;
+                    enemy.y += enemy.vy;
+
+                    if (enemy.x < 4 || enemy.x + enemy.width > canvas.width - 4) {
+                        enemy.vx *= -0.9;
+                    }
+
+                    if (Math.random() < 0.012) {
+                        enemyShoot(enemy);
+                    }
+
+                    if (enemy.y > canvas.height + 80 || enemy.swoopTime > 240) {
+                        enemy.entering = true;
+                        enemy.swooping = false;
+                        enemy.entryProgress = 0;
+                        enemy.entryDelay = Math.floor(Math.random() * 22);
+                        enemy.x = enemy.targetX + (Math.random() - 0.5) * 180;
+                        enemy.y = -120 - Math.random() * 100;
+                        enemy.startY = enemy.y;
+                        enemy.vx = 0;
+                        enemy.vy = 0;
+                    }
+                    return;
+                }
+
+                enemy.targetX += state.formationDirection * enemy.speed;
+                enemy.x += (enemy.targetX - enemy.x) * 0.2;
+                enemy.y += (enemy.targetY - enemy.y) * 0.22;
+
+                if (enemy.targetX < 8 || enemy.targetX + enemy.width > canvas.width - 8) {
+                    formationNeedsTurn = true;
                 }
 
                 enemy.attackCooldown -= 1;
                 if (enemy.attackCooldown <= 0) {
-                    if (Math.random() < 0.8) {
+                    if (Math.random() < 0.75) {
                         enemyShoot(enemy);
                     }
-                    enemy.attackCooldown = 40 + Math.random() * Math.max(30, 120 - state.wave * 8);
+                    enemy.attackCooldown = 45 + Math.random() * Math.max(35, 120 - state.wave * 8);
+                }
+
+                const diveChance = 0.00085 + state.wave * 0.00016;
+                if (Math.random() < diveChance) {
+                    enemy.swooping = true;
+                    enemy.swoopTime = 0;
+                    const enemyCenter = enemy.x + enemy.width / 2;
+                    const targetDelta = state.player.x - enemyCenter;
+                    enemy.vx = Math.max(-3.4, Math.min(3.4, targetDelta / 95)) + (Math.random() - 0.5) * 0.7;
+                    enemy.vy = 1.5 + state.wave * 0.15;
                 }
             });
+
+            if (formationNeedsTurn) {
+                state.formationDirection *= -1;
+                state.enemies.forEach(enemy => {
+                    if (!enemy.entering && !enemy.swooping) {
+                        enemy.targetY += 18;
+                    }
+                });
+            }
 
             for (const bullet of state.bullets) {
                 for (const enemy of state.enemies) {
