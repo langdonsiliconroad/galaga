@@ -3,58 +3,720 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Galaga</title>
+    <title>Galaga: Better Edition</title>
     <style>
-        body { margin: 0; overflow: hidden; }
-        canvas { display: block; background: #000; }
+        :root {
+            color-scheme: dark;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: radial-gradient(circle at top, #101638, #04050f 62%);
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .hud {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #e8eeff;
+            text-shadow: 0 0 10px rgba(120, 170, 255, 0.45);
+            font-size: 1rem;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            background: rgba(2, 4, 14, 0.68);
+            color: #eaf0ff;
+            text-align: center;
+            padding: 1rem;
+            z-index: 2;
+        }
+
+        .panel {
+            border: 1px solid rgba(124, 163, 255, 0.5);
+            border-radius: 12px;
+            background: rgba(12, 19, 47, 0.75);
+            box-shadow: 0 12px 50px rgba(0, 0, 0, 0.35);
+            padding: 1.3rem 1.6rem;
+            max-width: 580px;
+        }
+
+        .panel h1 {
+            margin: 0 0 0.45rem;
+            font-size: clamp(1.7rem, 4vw, 2.4rem);
+            letter-spacing: 0.04em;
+        }
+
+        .panel p {
+            margin: 0.2rem 0;
+            line-height: 1.4;
+            opacity: 0.95;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .hint {
+            margin-top: 0.8rem;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
     </style>
 </head>
 <body>
+    <div class="hud">
+        <div id="score">Score: 0</div>
+        <div id="wave">Wave: 1</div>
+        <div id="lives">Lives: 3</div>
+    </div>
+
+    <div id="overlay" class="overlay">
+        <div class="panel">
+            <h1 id="overlayTitle">Galaga: Better Edition</h1>
+            <p id="overlayMessage">Defend space against waves of enemies.</p>
+            <p>Move with <strong>← → / A D</strong>, shoot with <strong>Space</strong>, and press <strong>P</strong> to pause.</p>
+            <p class="hint">Press Enter to launch.</p>
+        </div>
+    </div>
+
     <canvas id="gameCanvas"></canvas>
+
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        const scoreEl = document.getElementById("score");
+        const waveEl = document.getElementById("wave");
+        const livesEl = document.getElementById("lives");
+        const overlay = document.getElementById("overlay");
+        const overlayTitle = document.getElementById("overlayTitle");
+        const overlayMessage = document.getElementById("overlayMessage");
 
-        let player = { x: canvas.width / 2 - 25, y: canvas.height - 50, width: 50, height: 30 };
-        let bullets = [];
-        let enemies = [];
-        let score = 0;
-
-        for (let i = 0; i < 5; i++) {
-            enemies.push({ x: Math.random() * (canvas.width - 50), y: Math.random() * 200, width: 50, height: 30 });
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
         }
 
-        function update() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = 'white';
-            ctx.fillRect(player.x, player.y, player.width, player.height);
-            bullets.forEach(bullet => {
-                bullet.y -= 5;
-                ctx.fillRect(bullet.x, bullet.y, 5, 20);
-            });
-            enemies.forEach(enemy => {
-                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
-            });
-            bullets = bullets.filter(bullet => bullet.y > 0);
+        resizeCanvas();
+        window.addEventListener("resize", resizeCanvas);
+
+        const keys = {
+            ArrowLeft: false,
+            ArrowRight: false,
+            KeyA: false,
+            KeyD: false
+        };
+
+        const state = {
+            started: false,
+            paused: false,
+            gameOver: false,
+            score: 0,
+            wave: 1,
+            lives: 3,
+            stars: [],
+            player: null,
+            bullets: [],
+            enemies: [],
+            enemyBullets: [],
+            explosions: [],
+            playerExplosions: [],
+            cooldown: 0,
+            waveTimer: 0,
+            waveCleared: false,
+            formationDirection: 1,
+            challengeWave: false
+        };
+
+        function createPlayer() {
+            return {
+                x: canvas.width / 2,
+                y: canvas.height - 90,
+                width: 48,
+                height: 30,
+                speed: 7
+            };
+        }
+
+        function isChallengeWave(wave) {
+            return wave % 3 === 0;
+        }
+
+        function resetGame() {
+            state.score = 0;
+            state.wave = 1;
+            state.lives = 3;
+            state.paused = false;
+            state.gameOver = false;
+            state.bullets = [];
+            state.enemyBullets = [];
+            state.explosions = [];
+            state.playerExplosions = [];
+            state.cooldown = 0;
+            state.waveTimer = 0;
+            state.waveCleared = false;
+            state.formationDirection = 1;
+            state.challengeWave = false;
+            state.player = createPlayer();
+            state.stars = Array.from({ length: 130 }, () => ({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 2 + 0.3,
+                speed: Math.random() * 1.1 + 0.35
+            }));
+            spawnWave(state.wave);
+            updateHud();
+        }
+
+        function spawnWave(wave) {
+            state.enemies = [];
+            state.waveCleared = false;
+            state.challengeWave = isChallengeWave(wave);
+            const rows = Math.min(2 + Math.floor(wave / 2), 5);
+            const cols = Math.min(6 + wave, 12);
+            const gap = 14;
+            const enemyWidth = 38;
+            const enemyHeight = 28;
+            const formationWidth = cols * (enemyWidth + gap) - gap;
+            const startX = (canvas.width - formationWidth) / 2;
+            const baseHealth = state.challengeWave ? 1 : 1 + Math.floor(wave / 3);
+
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    const targetX = startX + col * (enemyWidth + gap);
+                    const targetY = 90 + row * (enemyHeight + gap);
+                    state.enemies.push({
+                        x: targetX + (Math.random() - 0.5) * 220,
+                        y: -220 - row * 60 - Math.random() * 200,
+                        startY: -220 - row * 60,
+                        targetX,
+                        targetY,
+                        width: enemyWidth,
+                        height: enemyHeight,
+                        speed: 0.45 + wave * 0.05 + row * 0.07,
+                        attackCooldown: 50 + Math.random() * 120,
+                        health: baseHealth,
+                        points: 50 + row * 15,
+                        hue: (wave * 28 + row * 52 + col * 19) % 360,
+                        entryDelay: row * 9 + col * 2,
+                        entryProgress: 0,
+                        entering: true,
+                        swooping: false,
+                        swoopTime: 0,
+                        looping: false,
+                        loopAngle: 0,
+                        loopRadius: 64 + Math.random() * 38,
+                        loopCenterX: targetX,
+                        loopCenterY: targetY,
+                        exiting: false,
+                        vx: 0,
+                        vy: 0
+                    });
+                }
+            }
+        }
+
+        function startGame() {
+            state.started = true;
+            resetGame();
+            overlay.classList.add("hidden");
+        }
+
+        function updateHud() {
+            scoreEl.textContent = `Score: ${state.score}`;
+            waveEl.textContent = state.challengeWave ? `Wave: ${state.wave} (Challenge)` : `Wave: ${state.wave}`;
+            livesEl.textContent = `Lives: ${state.lives}`;
+        }
+
+        function circleRectCollision(cx, cy, r, rect) {
+            const nearestX = Math.max(rect.x, Math.min(cx, rect.x + rect.width));
+            const nearestY = Math.max(rect.y, Math.min(cy, rect.y + rect.height));
+            const dx = cx - nearestX;
+            const dy = cy - nearestY;
+            return dx * dx + dy * dy < r * r;
+        }
+
+        function rectsOverlap(a, b) {
+            return a.x < b.x + b.width &&
+                a.x + a.width > b.x &&
+                a.y < b.y + b.height &&
+                a.y + a.height > b.y;
+        }
+
+        function createExplosion(x, y, color = "#ffd778") {
+            for (let i = 0; i < 12; i++) {
+                const angle = (Math.PI * 2 * i) / 12 + Math.random() * 0.6;
+                const speed = Math.random() * 3 + 1;
+                state.explosions.push({
+                    x,
+                    y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 28 + Math.random() * 12,
+                    color
+                });
+            }
+        }
+
+        function createPlayerHitExplosion(x, y) {
+            const burstColors = ["#ff5277", "#ff8bd1", "#ffd166", "#7ce9ff"];
+            for (let i = 0; i < 28; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 4.8 + 1.4;
+                state.explosions.push({
+                    x,
+                    y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 30 + Math.random() * 14,
+                    color: burstColors[i % burstColors.length]
+                });
+            }
+
+            for (let ring = 0; ring < 3; ring++) {
+                state.playerExplosions.push({
+                    x,
+                    y,
+                    radius: 10 + ring * 8,
+                    growth: 2.8 + ring * 0.7,
+                    life: 26 - ring * 4,
+                    width: 4 - ring,
+                    color: ring === 0 ? "#ffffff" : ring === 1 ? "#ff82a8" : "#7ce9ff"
+                });
+            }
         }
 
         function shoot() {
-            bullets.push({ x: player.x + player.width / 2 - 2.5, y: player.y });
+            if (state.cooldown > 0 || !state.started || state.paused || state.gameOver) {
+                return;
+            }
+
+            state.bullets.push({
+                x: state.player.x,
+                y: state.player.y - state.player.height / 2,
+                radius: 4,
+                speed: 10
+            });
+            state.cooldown = 10;
         }
 
-        window.addEventListener('keydown', function(e) {
-            if (e.key === ' ') shoot();
-            else if (e.key === 'ArrowLeft' && player.x > 0) player.x -= 20;
-            else if (e.key === 'ArrowRight' && player.x < canvas.width - player.width) player.x += 20;
+        function enemyShoot(enemy) {
+            state.enemyBullets.push({
+                x: enemy.x + enemy.width / 2,
+                y: enemy.y + enemy.height,
+                radius: 4,
+                speed: 4 + state.wave * 0.25
+            });
+        }
+
+        function gameOver(win = false) {
+            state.gameOver = true;
+            state.paused = false;
+            overlay.classList.remove("hidden");
+            overlayTitle.textContent = win ? "Victory!" : "Mission Failed";
+            overlayMessage.textContent = win
+                ? `You beat wave ${state.wave}! Final score: ${state.score}`
+                : `Final score: ${state.score}. The galaxy still needs you.`;
+        }
+
+        function update() {
+            if (!state.started || state.paused || state.gameOver) {
+                draw();
+                return;
+            }
+
+            const moveLeft = keys.ArrowLeft || keys.KeyA;
+            const moveRight = keys.ArrowRight || keys.KeyD;
+            if (moveLeft) {
+                state.player.x -= state.player.speed;
+            }
+            if (moveRight) {
+                state.player.x += state.player.speed;
+            }
+            state.player.x = Math.max(state.player.width / 2, Math.min(canvas.width - state.player.width / 2, state.player.x));
+
+            if (state.cooldown > 0) {
+                state.cooldown -= 1;
+            }
+
+            state.stars.forEach(star => {
+                star.y += star.speed;
+                if (star.y > canvas.height) {
+                    star.y = 0;
+                    star.x = Math.random() * canvas.width;
+                }
+            });
+
+            state.bullets.forEach(bullet => {
+                bullet.y -= bullet.speed;
+            });
+            state.enemyBullets.forEach(bullet => {
+                bullet.y += bullet.speed;
+            });
+
+            let formationNeedsTurn = false;
+
+            state.enemies.forEach(enemy => {
+                if (enemy.entering) {
+                    if (enemy.entryDelay > 0) {
+                        enemy.entryDelay -= 1;
+                        enemy.y += 1.2;
+                        return;
+                    }
+
+                    enemy.entryProgress += (state.challengeWave ? 0.011 : 0.018) + state.wave * 0.0012;
+                    const t = Math.min(1, enemy.entryProgress);
+                    const eased = 1 - Math.pow(1 - t, 3);
+                    enemy.x += (enemy.targetX - enemy.x) * 0.08 + Math.sin(t * 8 + enemy.hue) * 0.35;
+                    enemy.y = enemy.startY + (enemy.targetY - enemy.startY) * eased + Math.sin(t * 10 + enemy.hue) * 3;
+
+                    if (t >= 1 || Math.abs(enemy.x - enemy.targetX) < 2) {
+                        enemy.entering = false;
+                        enemy.x = enemy.targetX;
+                        enemy.y = enemy.targetY;
+                        if (state.challengeWave) {
+                            enemy.looping = true;
+                            enemy.loopAngle = 0;
+                            enemy.loopCenterX = enemy.targetX + (Math.random() - 0.5) * 90;
+                            enemy.loopCenterY = enemy.targetY + 135 + Math.random() * 70;
+                        }
+                    }
+                    return;
+                }
+
+                if (state.challengeWave && enemy.looping) {
+                    enemy.loopAngle += 0.052;
+                    enemy.x = enemy.loopCenterX + Math.cos(enemy.loopAngle) * enemy.loopRadius;
+                    enemy.y = enemy.loopCenterY + Math.sin(enemy.loopAngle) * enemy.loopRadius;
+                    if (enemy.loopAngle >= Math.PI * 2) {
+                        enemy.looping = false;
+                        enemy.exiting = true;
+                        enemy.vx = enemy.targetX < canvas.width / 2 ? -1.5 : 1.5;
+                        enemy.vy = -2.45;
+                    }
+                    return;
+                }
+
+                if (state.challengeWave && enemy.exiting) {
+                    enemy.x += enemy.vx;
+                    enemy.y += enemy.vy;
+                    enemy.vy -= 0.02;
+                    if (enemy.y + enemy.height < -40 || enemy.x < -80 || enemy.x > canvas.width + 80) {
+                        enemy.dead = true;
+                    }
+                    return;
+                }
+
+                if (enemy.swooping) {
+                    enemy.swoopTime += 1;
+                    enemy.vy += 0.045;
+                    enemy.x += enemy.vx;
+                    enemy.y += enemy.vy;
+
+                    if (enemy.x < 4 || enemy.x + enemy.width > canvas.width - 4) {
+                        enemy.vx *= -0.9;
+                    }
+
+                    if (!state.challengeWave && Math.random() < 0.012) {
+                        enemyShoot(enemy);
+                    }
+
+                    if (enemy.y > canvas.height + 80 || enemy.swoopTime > 240) {
+                        enemy.entering = true;
+                        enemy.swooping = false;
+                        enemy.entryProgress = 0;
+                        enemy.entryDelay = Math.floor(Math.random() * 22);
+                        enemy.x = enemy.targetX + (Math.random() - 0.5) * 180;
+                        enemy.y = -120 - Math.random() * 100;
+                        enemy.startY = enemy.y;
+                        enemy.vx = 0;
+                        enemy.vy = 0;
+                    }
+                    return;
+                }
+
+                enemy.targetX += state.formationDirection * enemy.speed;
+                enemy.x += (enemy.targetX - enemy.x) * 0.2;
+                enemy.y += (enemy.targetY - enemy.y) * 0.22;
+
+                if (enemy.targetX < 8 || enemy.targetX + enemy.width > canvas.width - 8) {
+                    formationNeedsTurn = true;
+                }
+
+                enemy.attackCooldown -= 1;
+                if (!state.challengeWave && enemy.attackCooldown <= 0) {
+                    if (Math.random() < 0.75) {
+                        enemyShoot(enemy);
+                    }
+                    enemy.attackCooldown = 45 + Math.random() * Math.max(35, 120 - state.wave * 8);
+                }
+
+                const diveChance = 0.00085 + state.wave * 0.00016;
+                if (!state.challengeWave && Math.random() < diveChance) {
+                    enemy.swooping = true;
+                    enemy.swoopTime = 0;
+                    const enemyCenter = enemy.x + enemy.width / 2;
+                    const targetDelta = state.player.x - enemyCenter;
+                    enemy.vx = Math.max(-3.4, Math.min(3.4, targetDelta / 95)) + (Math.random() - 0.5) * 0.7;
+                    enemy.vy = 1.5 + state.wave * 0.15;
+                }
+            });
+
+            if (formationNeedsTurn) {
+                state.formationDirection *= -1;
+                state.enemies.forEach(enemy => {
+                    if (!enemy.entering && !enemy.swooping) {
+                        enemy.targetY += 18;
+                    }
+                });
+            }
+
+            for (const bullet of state.bullets) {
+                for (const enemy of state.enemies) {
+                    if (!enemy.dead && circleRectCollision(bullet.x, bullet.y, bullet.radius, enemy)) {
+                        bullet.hit = true;
+                        enemy.health -= 1;
+                        createExplosion(bullet.x, bullet.y, "#8ed8ff");
+                        if (enemy.health <= 0) {
+                            enemy.dead = true;
+                            state.score += enemy.points;
+                            createExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, "#ffd778");
+                        }
+                        break;
+                    }
+                }
+            }
+
+            for (const bullet of state.enemyBullets) {
+                const playerRect = {
+                    x: state.player.x - state.player.width / 2,
+                    y: state.player.y - state.player.height / 2,
+                    width: state.player.width,
+                    height: state.player.height
+                };
+                if (circleRectCollision(bullet.x, bullet.y, bullet.radius, playerRect)) {
+                    bullet.hit = true;
+                    state.lives -= 1;
+                    createPlayerHitExplosion(state.player.x, state.player.y);
+                    if (state.lives <= 0) {
+                        gameOver(false);
+                    }
+                }
+            }
+
+            if (!state.gameOver) {
+                for (const enemy of state.enemies) {
+                    const enemyRect = enemy;
+                    const playerRect = {
+                        x: state.player.x - state.player.width / 2,
+                        y: state.player.y - state.player.height / 2,
+                        width: state.player.width,
+                        height: state.player.height
+                    };
+                    if (!enemy.dead && rectsOverlap(enemyRect, playerRect)) {
+                        createPlayerHitExplosion(state.player.x, state.player.y);
+                        gameOver(false);
+                        break;
+                    }
+                    const inFormationLane = Math.abs(enemy.y - enemy.targetY) < 8;
+                    if (!enemy.dead && !enemy.entering && !enemy.swooping && inFormationLane && enemy.y + enemy.height >= canvas.height - 60) {
+                        gameOver(false);
+                        break;
+                    }
+                }
+            }
+
+            state.bullets = state.bullets.filter(b => b.y > -20 && !b.hit);
+            state.enemyBullets = state.enemyBullets.filter(b => b.y < canvas.height + 20 && !b.hit);
+            state.enemies = state.enemies.filter(enemy => !enemy.dead);
+
+            state.explosions.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vx *= 0.97;
+                p.vy *= 0.97;
+                p.life -= 1;
+            });
+            state.explosions = state.explosions.filter(p => p.life > 0);
+
+            state.playerExplosions.forEach(ring => {
+                ring.radius += ring.growth;
+                ring.life -= 1;
+            });
+            state.playerExplosions = state.playerExplosions.filter(ring => ring.life > 0);
+
+            if (!state.gameOver && state.enemies.length === 0) {
+                if (!state.waveCleared) {
+                    state.wave += 1;
+                    state.waveTimer = 0;
+                    state.waveCleared = true;
+                }
+                state.waveTimer += 1;
+                if (state.waveTimer > 20) {
+                    spawnWave(state.wave);
+                    state.waveTimer = 0;
+                }
+            }
+
+            updateHud();
+            draw();
+        }
+
+        function drawPlayer() {
+            const x = state.player.x;
+            const y = state.player.y;
+            const w = state.player.width;
+            const h = state.player.height;
+
+            ctx.save();
+            ctx.translate(x, y);
+            const gradient = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
+            gradient.addColorStop(0, "#9cc4ff");
+            gradient.addColorStop(1, "#6fffd7");
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.moveTo(0, -h / 2);
+            ctx.lineTo(w / 2, h / 2);
+            ctx.lineTo(0, h / 3);
+            ctx.lineTo(-w / 2, h / 2);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = "#d9f5ff";
+            ctx.fillRect(-4, -h / 2 + 8, 8, 8);
+            ctx.restore();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (const star of state.stars) {
+                ctx.fillStyle = `rgba(255,255,255,${0.35 + star.size / 5})`;
+                ctx.fillRect(star.x, star.y, star.size, star.size);
+            }
+
+            if (state.started) {
+                drawPlayer();
+            }
+
+            for (const bullet of state.bullets) {
+                ctx.fillStyle = "#97e7ff";
+                ctx.beginPath();
+                ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            for (const bullet of state.enemyBullets) {
+                ctx.fillStyle = "#ff8fab";
+                ctx.beginPath();
+                ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            for (const enemy of state.enemies) {
+                const damageShift = (1 - enemy.health / Math.max(1, 1 + Math.floor(state.wave / 3))) * 22;
+                const mainColor = `hsl(${(enemy.hue + damageShift) % 360} 92% 58%)`;
+                const trimColor = `hsl(${(enemy.hue + 50) % 360} 95% 78%)`;
+                ctx.fillStyle = mainColor;
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                ctx.fillStyle = trimColor;
+                ctx.fillRect(enemy.x + 3, enemy.y + 4, enemy.width - 6, 4);
+                ctx.fillStyle = "#1f263a";
+                ctx.fillRect(enemy.x + 8, enemy.y + 8, enemy.width - 16, 8);
+                ctx.fillStyle = "rgba(255,255,255,0.8)";
+                ctx.fillRect(enemy.x + enemy.width / 2 - 3, enemy.y + 17, 6, 3);
+            }
+
+            for (const p of state.explosions) {
+                ctx.globalAlpha = Math.max(0, p.life / 35);
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, 3, 3);
+                ctx.globalAlpha = 1;
+            }
+
+            for (const ring of state.playerExplosions) {
+                ctx.globalAlpha = Math.max(0, ring.life / 26);
+                ctx.strokeStyle = ring.color;
+                ctx.lineWidth = ring.width;
+                ctx.beginPath();
+                ctx.arc(ring.x, ring.y, ring.radius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
+
+            if (state.paused) {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.42)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "700 42px Segoe UI";
+                ctx.textAlign = "center";
+                ctx.fillText("Paused", canvas.width / 2, canvas.height / 2);
+            }
+        }
+
+        window.addEventListener("keydown", (e) => {
+            if (e.code in keys) {
+                keys[e.code] = true;
+                e.preventDefault();
+            }
+
+            if (e.code === "Space") {
+                shoot();
+                e.preventDefault();
+            }
+
+            if (e.code === "Enter") {
+                if (!state.started || state.gameOver) {
+                    startGame();
+                }
+            }
+
+            if (e.code === "KeyP" && state.started && !state.gameOver) {
+                state.paused = !state.paused;
+                overlay.classList.toggle("hidden", !state.paused);
+                if (state.paused) {
+                    overlayTitle.textContent = "Paused";
+                    overlayMessage.textContent = "Take a breath, pilot. Press P to continue.";
+                }
+            }
         });
 
-        function gameLoop() {
+        window.addEventListener("keyup", (e) => {
+            if (e.code in keys) {
+                keys[e.code] = false;
+                e.preventDefault();
+            }
+        });
+
+        function loop() {
             update();
-            requestAnimationFrame(gameLoop);
+            requestAnimationFrame(loop);
         }
-        gameLoop();
+
+        resetGame();
+        overlay.classList.remove("hidden");
+        loop();
     </script>
 </body>
 </html>
