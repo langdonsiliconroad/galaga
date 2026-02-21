@@ -494,7 +494,8 @@
                         gameOver(false);
                         break;
                     }
-                    if (!enemy.dead && !enemy.entering && !enemy.swooping && enemy.y + enemy.height >= canvas.height - 60) {
+                    const inFormationLane = Math.abs(enemy.y - enemy.targetY) < 8;
+                    if (!enemy.dead && !enemy.entering && !enemy.swooping && inFormationLane && enemy.y + enemy.height >= canvas.height - 60) {
                         gameOver(false);
                         break;
                     }
