@@ -494,7 +494,7 @@
                         gameOver(false);
                         break;
                     }
-                    if (!enemy.dead && enemy.y + enemy.height >= canvas.height - 60) {
+                    if (!enemy.dead && !enemy.entering && !enemy.swooping && enemy.y + enemy.height >= canvas.height - 60) {
                         gameOver(false);
                         break;
                     }
