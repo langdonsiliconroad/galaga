@@ -226,7 +226,7 @@
                         swoopTime: 0,
                         looping: false,
                         loopAngle: 0,
-                        loopRadius: 40 + Math.random() * 28,
+                        loopRadius: 64 + Math.random() * 38,
                         loopCenterX: targetX,
                         loopCenterY: targetY,
                         exiting: false,
@@ -385,7 +385,7 @@
                         return;
                     }
 
-                    enemy.entryProgress += 0.018 + state.wave * 0.0012;
+                    enemy.entryProgress += (state.challengeWave ? 0.011 : 0.018) + state.wave * 0.0012;
                     const t = Math.min(1, enemy.entryProgress);
                     const eased = 1 - Math.pow(1 - t, 3);
                     enemy.x += (enemy.targetX - enemy.x) * 0.08 + Math.sin(t * 8 + enemy.hue) * 0.35;
@@ -399,21 +399,21 @@
                             enemy.looping = true;
                             enemy.loopAngle = 0;
                             enemy.loopCenterX = enemy.targetX + (Math.random() - 0.5) * 90;
-                            enemy.loopCenterY = enemy.targetY + 50 + Math.random() * 26;
+                            enemy.loopCenterY = enemy.targetY + 135 + Math.random() * 70;
                         }
                     }
                     return;
                 }
 
                 if (state.challengeWave && enemy.looping) {
-                    enemy.loopAngle += 0.09;
+                    enemy.loopAngle += 0.052;
                     enemy.x = enemy.loopCenterX + Math.cos(enemy.loopAngle) * enemy.loopRadius;
                     enemy.y = enemy.loopCenterY + Math.sin(enemy.loopAngle) * enemy.loopRadius;
                     if (enemy.loopAngle >= Math.PI * 2) {
                         enemy.looping = false;
                         enemy.exiting = true;
-                        enemy.vx = enemy.targetX < canvas.width / 2 ? -2.1 : 2.1;
-                        enemy.vy = -3.4;
+                        enemy.vx = enemy.targetX < canvas.width / 2 ? -1.5 : 1.5;
+                        enemy.vy = -2.45;
                     }
                     return;
                 }
