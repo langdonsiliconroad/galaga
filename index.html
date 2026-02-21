@@ -144,7 +144,9 @@
             playerExplosions: [],
             cooldown: 0,
             waveTimer: 0,
-            formationDirection: 1
+            waveCleared: false,
+            formationDirection: 1,
+            challengeWave: false
         };
 
         function createPlayer() {
@@ -155,6 +157,10 @@
                 height: 30,
                 speed: 7
             };
+        }
+
+        function isChallengeWave(wave) {
+            return wave % 3 === 0;
         }
 
         function resetGame() {
@@ -169,7 +175,9 @@
             state.playerExplosions = [];
             state.cooldown = 0;
             state.waveTimer = 0;
+            state.waveCleared = false;
             state.formationDirection = 1;
+            state.challengeWave = false;
             state.player = createPlayer();
             state.stars = Array.from({ length: 130 }, () => ({
                 x: Math.random() * canvas.width,
@@ -183,6 +191,8 @@
 
         function spawnWave(wave) {
             state.enemies = [];
+            state.waveCleared = false;
+            state.challengeWave = isChallengeWave(wave);
             const rows = Math.min(2 + Math.floor(wave / 2), 5);
             const cols = Math.min(6 + wave, 12);
             const gap = 14;
@@ -190,7 +200,7 @@
             const enemyHeight = 28;
             const formationWidth = cols * (enemyWidth + gap) - gap;
             const startX = (canvas.width - formationWidth) / 2;
-            const baseHealth = 1 + Math.floor(wave / 3);
+            const baseHealth = state.challengeWave ? 1 : 1 + Math.floor(wave / 3);
 
             for (let row = 0; row < rows; row++) {
                 for (let col = 0; col < cols; col++) {
@@ -214,6 +224,12 @@
                         entering: true,
                         swooping: false,
                         swoopTime: 0,
+                        looping: false,
+                        loopAngle: 0,
+                        loopRadius: 40 + Math.random() * 28,
+                        loopCenterX: targetX,
+                        loopCenterY: targetY,
+                        exiting: false,
                         vx: 0,
                         vy: 0
                     });
@@ -229,7 +245,7 @@
 
         function updateHud() {
             scoreEl.textContent = `Score: ${state.score}`;
-            waveEl.textContent = `Wave: ${state.wave}`;
+            waveEl.textContent = state.challengeWave ? `Wave: ${state.wave} (Challenge)` : `Wave: ${state.wave}`;
             livesEl.textContent = `Lives: ${state.lives}`;
         }
 
@@ -379,6 +395,35 @@
                         enemy.entering = false;
                         enemy.x = enemy.targetX;
                         enemy.y = enemy.targetY;
+                        if (state.challengeWave) {
+                            enemy.looping = true;
+                            enemy.loopAngle = 0;
+                            enemy.loopCenterX = enemy.targetX + (Math.random() - 0.5) * 90;
+                            enemy.loopCenterY = enemy.targetY + 50 + Math.random() * 26;
+                        }
+                    }
+                    return;
+                }
+
+                if (state.challengeWave && enemy.looping) {
+                    enemy.loopAngle += 0.09;
+                    enemy.x = enemy.loopCenterX + Math.cos(enemy.loopAngle) * enemy.loopRadius;
+                    enemy.y = enemy.loopCenterY + Math.sin(enemy.loopAngle) * enemy.loopRadius;
+                    if (enemy.loopAngle >= Math.PI * 2) {
+                        enemy.looping = false;
+                        enemy.exiting = true;
+                        enemy.vx = enemy.targetX < canvas.width / 2 ? -2.1 : 2.1;
+                        enemy.vy = -3.4;
+                    }
+                    return;
+                }
+
+                if (state.challengeWave && enemy.exiting) {
+                    enemy.x += enemy.vx;
+                    enemy.y += enemy.vy;
+                    enemy.vy -= 0.02;
+                    if (enemy.y + enemy.height < -40 || enemy.x < -80 || enemy.x > canvas.width + 80) {
+                        enemy.dead = true;
                     }
                     return;
                 }
@@ -393,7 +438,7 @@
                         enemy.vx *= -0.9;
                     }
 
-                    if (Math.random() < 0.012) {
+                    if (!state.challengeWave && Math.random() < 0.012) {
                         enemyShoot(enemy);
                     }
 
@@ -420,7 +465,7 @@
                 }
 
                 enemy.attackCooldown -= 1;
-                if (enemy.attackCooldown <= 0) {
+                if (!state.challengeWave && enemy.attackCooldown <= 0) {
                     if (Math.random() < 0.75) {
                         enemyShoot(enemy);
                     }
@@ -428,7 +473,7 @@
                 }
 
                 const diveChance = 0.00085 + state.wave * 0.00016;
-                if (Math.random() < diveChance) {
+                if (!state.challengeWave && Math.random() < diveChance) {
                     enemy.swooping = true;
                     enemy.swoopTime = 0;
                     const enemyCenter = enemy.x + enemy.width / 2;
@@ -522,15 +567,15 @@
             state.playerExplosions = state.playerExplosions.filter(ring => ring.life > 0);
 
             if (!state.gameOver && state.enemies.length === 0) {
-                state.wave += 1;
-                if (state.wave > 8) {
-                    gameOver(true);
-                } else {
-                    state.waveTimer += 1;
-                    if (state.waveTimer > 20) {
-                        spawnWave(state.wave);
-                        state.waveTimer = 0;
-                    }
+                if (!state.waveCleared) {
+                    state.wave += 1;
+                    state.waveTimer = 0;
+                    state.waveCleared = true;
+                }
+                state.waveTimer += 1;
+                if (state.waveTimer > 20) {
+                    spawnWave(state.wave);
+                    state.waveTimer = 0;
                 }
             }
 
